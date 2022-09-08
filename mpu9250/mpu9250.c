@@ -1,3 +1,12 @@
+    /*!
+    *   --------------------------------------------------------------------------
+    *                       ///MPU9250 Source file\\\
+    *   --------------------------------------------------------------------------
+    *   @author RCR group developers
+    *   @date 07/09/2022 - last update version MPU
+    *
+    *       @note [MPU] MPU Source file.
+    */
 #include "mpu9250.h"
 
 #if(EXTERNAL_MPU9250 == 1)
@@ -5,40 +14,74 @@
 #define MPU_Reconnect_it    (100)
 static uint32_t MPU_Timeout;
 
+static const uint8_t BYPASS_EN = 0x2;
+static const uint8_t CLOCK_SEL_PLL = 0x1;
+static const uint8_t I2C_MASTER_DS = 0x00;
+__attribute__((unused)) static const uint8_t PWR_RESET = 0x80;
+
+static const uint8_t AK8963_PWR_DOWN = 0x00;
+__attribute__((unused)) static const uint8_t AK8963_RESET = 0x01;
+static const uint8_t AK8963_FUSE_ROM = 0x0F;
 /*!
 *   @brief Initialization MPU9250
 *       @arg status - errors with connection to device
-*       @value 1 - Start success, no errors
-*       @value 2 - power resetting done
+*       @value 1 - AK8963 init end
+*       @value 2 - Calibration (if enable setting)
 *       @value 3 - Verification complete
 *       @value 4 - MPU_Connect done
 *       @value 5 - begin connection
 */
-uint8_t MPU_Init(uint8_t aScale, uint8_t gScale)
+uint8_t MPU_Init(void)
 {
-    if(I2CBusBusyEvent(__configEXTMPU_SOURCE))  I2C_RestoreConnection(I2C1);
-
-    I2CSimpleConfigure(__configEXTMPU_SOURCE,I2C_Fast);
+    // restore bad connection
+    if(I2CBusBusyEvent(__configEXTMPU_SOURCE))
+    {
+        I2C_RestoreConnection(__configEXTMPU_SOURCE);
+        I2CSimpleConfigure(__configEXTMPU_SOURCE,I2C_Fast);
+    }
     bool connect = false;
 
     connect = MPU_Connect(__configEXTMPU_SOURCE,true);
     if(!connect) return 1;
 
     uint8_t Data;
+    // MPU9250 check WHO_AM_I register
     Data = I2C_MemoryReadSingle(__configEXTMPU_SOURCE,MPU9250_ADDR,MPUWHO_AM_I);
-    if((Data) != MPUWHO_AM_I_9250) return 1;
+    delay_ms(5);
+    if(Data != MPUWHO_AM_I_9250) return 1;
+
+    // Set clock source PLL 0x1
+    Data = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE,MPU9250_ADDR,MPUPWR_MGMT_1,CLOCK_SEL_PLL);
+    delay_ms(5);
+    if(Data != CLOCK_SEL_PLL) return 1;
+
+    Data = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE,MPU9250_ADDR,MPUUSER_CTRL,I2C_MASTER_DS);
+    delay_ms(5);
+    if(Data != I2C_MASTER_DS) return 1;
+
+    // Enable bypass for AK8963
+    Data = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE,MPU9250_ADDR,MPUINT_PIN_CFG,BYPASS_EN);
+    delay_ms(5);
+
+    // AK8963 check WHO_AM_I register
+    Data = I2C_MemoryReadSingle(__configEXTMPU_SOURCE,AK8963_ADDR,AK8963_WHO_AM_I);
+    if(Data != AK8963_ID) return 1;
+    delay_ms(5);
 #if(CALC_I2C_SCANNING == 1)
     MPU9250.MPUstatus = 3;
 #endif/*CALC_I2C_SCANNING*/
+#if(__configEXTMPU_Calibration == 1)
+    uint8_t accelerometerFullScaleRange = AFSR_4G;
+    uint8_t gyroscopeFullScaleRange  = GFSR_500DPS;
+
+    // calibration parameters for gyro and accel
+    MPU_ScaleCalibration(__configEXTMPU_SOURCE,accelerometerFullScaleRange,gyroscopeFullScaleRange);
     delay_ms(5);
-    (void)I2C_MemoryWriteSingle(__configEXTMPU_SOURCE,MPU9250_ADDR,MPUPWR_MGMT_1,0x00);
-    delay_ms(5);
+
 #if(CALC_I2C_SCANNING == 1)
     MPU9250.MPUstatus = 2;
 #endif/*CALC_I2C_SCANNING*/
-#if(__configEXTMPU_Calibration == 1)
-    MPU_ScaleCalibration(__configEXTMPU_SOURCE,aScale,gScale);
-    delay_ms(5);
+
     AK8963_Init();
 #endif /*__configEXTMPU_Calibration*/
 #if(CALC_I2C_SCANNING == 1)
@@ -58,133 +101,47 @@ return 0;
 void AK8963_Init(void)
 {
 #if(CALC_I2C_SCANNING == 1)
-    MPU9250.AK8963status = 3;
-#endif/*CALC_I2C_SCANNING*/
-    __attribute__((unused)) uint8_t REG;
-    uint8_t REGbuf[3];
-
-    // set I2C Master module
-    (void)I2C_MemoryWriteSingle(__configEXTMPU_SOURCE, MPU9250_ADDR, MPUI2C_MST_CTRL, 0x20);
-
-    // set I2C 400kHz Frequency
-    (void)I2C_MemoryWriteSingle(__configEXTMPU_SOURCE, MPU9250_ADDR, MPUI2C_MST_CTRL, 0xD);
-
-    // Power mode OFF
-    REG = AK8963_WriteRegister(AK8963_CTRL1, 0x00, 1);
-    delay_ms(5);
-
-    // Enable FUSE access mode
-    REG = AK8963_WriteRegister(AK8963_CTRL1, 0xF, 1);
-    delay_ms(5);
-
-    (void)I2C_MemoryWriteSingle(__configEXTMPU_SOURCE, MPU9250_ADDR, MPUPWR_MGMT_1, );
-
-    // scale calibration
-    (void)AK8963_ReadRegisters(AK8963_ASAX, REGbuf, 3);
-    MPU9250.MagnetometerScaleFactor[0] = ((((float)REGbuf[0]) - 128.0)/ 256.0 + 1.0)* 4912.0 / 32760.0;
-    MPU9250.MagnetometerScaleFactor[1] = ((((float)REGbuf[1]) - 128.0)/ 256.0 + 1.0)* 4912.0 / 32760.0;
-    MPU9250.MagnetometerScaleFactor[2] = ((((float)REGbuf[2]) - 128.0)/ 256.0 + 1.0)* 4912.0 / 32760.0;
-
-    // Power mode OFF
-    REG = AK8963_WriteRegister(AK8963_CTRL1, 0x00, 1);
-    delay_ms(5);
-
-    // Power mode on v2
-    REG = AK8963_WriteRegister(AK8963_CTRL1, 0x16, 1);
-    delay_ms(5);
-
-    uint8_t Buf[6];
-    (void)AK8963_ReadRegisters(AK8963_HXL, Buf, 6);
-
-#if(CALC_I2C_SCANNING == 1)
     MPU9250.AK8963status = 2;
 #endif/*CALC_I2C_SCANNING*/
-}
+    __attribute__((unused)) uint8_t Data;
 
-/*!
-*   @brief AK8963_ReadRegister(uint8_t Register, uint8_t* Buffer, uint8_t Length)
-*               Read internal magnetometer register
-*   @arg Register - internal magnetometer register
-*   @arg Buffer - buffer for read value
-*   @arg Length - necessary length for parsing
-*       @return Filed buffer includes internal data
-*/
-uint8_t AK8963_ReadRegisters(uint8_t Register, uint8_t* Buffer, uint8_t Length)
-{
-    uint8_t REG, SuccessRead;
-    // Send to MPU AK8963 slave address
-    REG = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE, MPU9250_ADDR, MPUI2C_SLV0_ADDR, (AK8963_ADDR | 0x80));
-    if(REG == 0) return 0;
-    delay_ms(5);
-    //Send to MPU AK8963 register to Read
-    REG = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE, MPU9250_ADDR, MPUI2C_SLV0_REG, Register);
-    if(REG == 0) return 0;
-    delay_ms(5);
-    //Send to MPU enable bits for new slave device
-    REG = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE, MPU9250_ADDR, MPUI2C_SLV0_CTRL, (Length | 0x80));
-    if(REG == 0) return 0;
-    delay_ms(5);
+    // Power mode OFF
+    Data = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE,AK8963_ADDR,AK8963_CNTL1,AK8963_PWR_DOWN);
+    delay_ms(100);
+    if(Data != AK8963_PWR_DOWN) return;
 
-    SuccessRead = I2C_MemoryReadMultiple(__configEXTMPU_SOURCE, MPU9250_ADDR, MPUEXT_SENS_DATA_00,
-                                         Buffer, Length);
-    if(SuccessRead != Length) return 0;
+    // Power mode FUSE ROM
+    Data = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE,AK8963_ADDR,AK8963_CNTL1,AK8963_FUSE_ROM);
+    delay_ms(100);
+    if(Data != AK8963_FUSE_ROM) return;
 
-return SuccessRead;
-}
+    uint8_t Buf[3];
+    (void)I2C_MemoryReadMultiple(__configEXTMPU_SOURCE,AK8963_ADDR,AK8963_ASAX, Buf, 3);
+    MPU9250.MagnetometerScaleFactor[0] = (float)(Buf[0] - 128) /  256.0 + 1.0;
+    MPU9250.MagnetometerScaleFactor[1] = (float)(Buf[1] - 128) /  256.0 + 1.0;
+    MPU9250.MagnetometerScaleFactor[2] = (float)(Buf[2] - 128) /  256.0 + 1.0;
+    delay_ms(100);
 
-/*!
-*   @brief AK8963_WriteRegister(uint8_t Register, uint8_t Value, uint8_t Length)
-*               Write internal magnetometer register
-*   @arg Register - internal magnetometer register
-*   @arg Value - Value that send to device
-*   @arg Length - necessary length for sending
-*       @return Data sends to device
-*/
-uint8_t AK8963_WriteRegister(uint8_t Register, uint8_t Value, uint8_t Length)
-{
-    uint8_t REG;
-    //Send to MPU AK8963 slave address
-    REG = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE, MPU9250_ADDR, MPUI2C_SLV0_ADDR, AK8963_ADDR);
-    if(REG == 0) return 0;
-    delay_ms(5);
-    //Send to MPU AK8963 register to Write
-    REG = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE, MPU9250_ADDR, MPUI2C_SLV0_REG, Register);
-    if(REG == 0) return 0;
-    delay_ms(5);
-    //Send Value to Data Output register of device
-    REG = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE, MPU9250_ADDR, MPUI2C_SLV0_DO, Value);
-    if(REG == 0) return 0;
-    delay_ms(5);
-    //Send to MPU enable bits for new slave device
-    REG = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE, MPU9250_ADDR, MPUI2C_SLV0_CTRL, (0x80 | Length));
-    if(REG == 0) return 0;
-    delay_ms(5);
+#if(CALC_I2C_SCANNING == 1)
+    MPU9250.AK8963status = 1;
+#endif/*CALC_I2C_SCANNING*/
 
-    REG = AK8963_ReadRegister(Register, 1);
-    if(REG != Value) return 0;
+    // Power mode OFF
+    Data = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE,AK8963_ADDR,AK8963_CNTL2,AK8963_RESET);
+    delay_ms(100);
+    if(Data != AK8963_RESET);
 
-return REG;
-}
+    uint8_t magnetometerResolutionRange = __configEXTMPU_mScale;
+    uint8_t AK8963_Mode = magnetometerResolutionRange << 4 | 0x6;
 
-uint8_t AK8963_ReadRegister(uint8_t Register, uint8_t Length)
-{
-    uint8_t REG;
-    // Send to MPU AK8963 slave address
-    REG = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE, MPU9250_ADDR, MPUI2C_SLV0_ADDR, (AK8963_ADDR | 0x80));
-    if(REG == 0) return 0;
-    delay_ms(5);
-    //Send to MPU AK8963 register to Read
-    REG = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE, MPU9250_ADDR, MPUI2C_SLV0_REG, Register);
-    if(REG == 0) return 0;
-    delay_ms(5);
-    //Send to MPU enable bits for new slave device
-    REG = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE, MPU9250_ADDR, MPUI2C_SLV0_CTRL, (Length | 0x80));
-    if(REG == 0) return 0;
-    delay_ms(5);
+    // set Continuous measurement mode 1
+    Data = I2C_MemoryWriteSingle(__configEXTMPU_SOURCE,AK8963_ADDR,AK8963_CNTL1,AK8963_Mode);
+    delay_ms(100);
+    if(Data != AK8963_Mode) return;
 
-    REG = I2C_MemoryReadSingle(__configEXTMPU_SOURCE, MPU9250_ADDR, MPUEXT_SENS_DATA_00);
-
-return REG;
+#if(CALC_I2C_SCANNING == 1)
+    MPU9250.AK8963status = 0;
+#endif/*CALC_I2C_SCANNING*/
 }
 
 void MPU_ScaleCalibration(I2C_TypeDef* I2Cx, uint8_t aScale, uint8_t gScale)
@@ -259,6 +216,7 @@ void MPU_GyroscopeCalibration(I2C_TypeDef* I2Cx, uint16_t CalPoints)
 
     for(int i = 0; i < CalPoints; i++)
     {
+        MPU_ReadRawData();
         x += MPU9250.Raw_Data[4];
         y += MPU9250.Raw_Data[5];
         z += MPU9250.Raw_Data[6];
@@ -324,17 +282,15 @@ bool MPU_Connect(I2C_TypeDef* I2Cx, bool IsWrite)
 return false;
 }
 
-uint8_t Bus[20];
-bool MPU_ReadRawData(I2C_TypeDef* I2Cx)
+uint8_t Bus[21];
+void MPU_ReadRawData(void)
 {
     uint8_t* MPU_data = Bus;
     //uint8_t* AK8963_data = MPU_data + 14;
 
-    uint16_t DataItems = I2C_MemoryReadMultiple(I2Cx,MPU9250_ADDR,MPUACCEL_XOUT_H, (uint8_t *)MPU_data, 14);
-    if(DataItems != 14) return false;
+    uint16_t DataItems = I2C_MemoryReadMultiple(__configEXTMPU_SOURCE,MPU9250_ADDR,MPUACCEL_XOUT_H, (uint8_t *)MPU_data, 14);
+    if(DataItems != 14) return;
     MPU9250.MPUstatus = 0;
-//    DataItems = I2C_MemoryReadMultiple(I2Cx,MPU9250_ADDR,EXT_SENS_DATA_00,(uint8_t *)AK8963_data, 6);
-//    if(DataItems != 6) return false;
 
     MPU9250.Raw_Data[0] = Bus[0] << 8 | Bus[1];     //ax
     MPU9250.Raw_Data[1] = Bus[2] << 8 | Bus[3];     //ay
@@ -343,9 +299,7 @@ bool MPU_ReadRawData(I2C_TypeDef* I2Cx)
     MPU9250.Raw_Data[4] = Bus[8] << 8 | Bus[9];     //gx
     MPU9250.Raw_Data[5] = Bus[10] << 8 | Bus[11];   //gy
     MPU9250.Raw_Data[6] = Bus[12] << 8 | Bus[13];   //gz
-//    MPU9250.Raw_Data[7] = Bus[15] << 8 | Bus[14];   //mx
-//    MPU9250.Raw_Data[8] = Bus[17] << 8 | Bus[16];   //my
-//    MPU9250.Raw_Data[9] = Bus[19] << 8 | Bus[18];   //mz
+
 
     MPU9250.Accelerometer[0] = MPU9250.Raw_Data[0] / MPU9250.aScaleFactor;
     MPU9250.Accelerometer[1] = MPU9250.Raw_Data[1] / MPU9250.aScaleFactor;
@@ -354,14 +308,24 @@ bool MPU_ReadRawData(I2C_TypeDef* I2Cx)
     MPU9250.Gyroscope[0] = (MPU9250.Raw_Data[4] - MPU9250.GyroCal[0]) / MPU9250.gScaleFactor;
     MPU9250.Gyroscope[1] = (MPU9250.Raw_Data[5] - MPU9250.GyroCal[1]) / MPU9250.gScaleFactor;
     MPU9250.Gyroscope[2] = (MPU9250.Raw_Data[6] - MPU9250.GyroCal[2]) / MPU9250.gScaleFactor;
-    //DataItems = I2C_MemoryReadMultiple(I2Cx,MPU9250_ADDR,Magnet_XOUT_L, Bus1, 6);
-    //if(DataItems != 6) return false;
-
-//    MPU9250.Compass[0] = Bus1[1] << 8 | Bus1[0];
-//    MPU9250.Compass[1] = Bus1[3] << 8 | Bus1[2];
-//    MPU9250.Compass[2] = Bus1[5] << 8 | Bus1[4];
-
-return true;
 }
+float df;
+void AK8963_ReadRawData(void)
+{
+    uint8_t DataItems = I2C_MemoryReadSingle(__configEXTMPU_SOURCE,AK8963_ADDR,AK8963_ST1);
+    delay_ms(2);
+    DataItems &= 0x1;
+    if(DataItems == 0x00) return;
 
+    uint8_t* Data = Bus + 14;
+    DataItems = I2C_MemoryReadMultiple(__configEXTMPU_SOURCE,AK8963_ADDR,AK8963_HXL,Data,7);
+    if(DataItems != 7) return;
+
+    MPU9250.Raw_Data[7] = Bus[15] << 8 | Bus[14];
+    MPU9250.Raw_Data[8] = Bus[17] << 8 | Bus[16];
+    MPU9250.Raw_Data[9] = Bus[19] << 8 | Bus[18];
+
+    df = Bus[15] << 8 | Bus[14];
+    delay_ms(10);
+}
 #endif /*EXTERNAL_MPU9250*/
