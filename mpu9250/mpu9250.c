@@ -17,11 +17,11 @@ static uint32_t MPU_Timeout;
 static const uint8_t BYPASS_EN = 0x2;
 static const uint8_t CLOCK_SEL_PLL = 0x1;
 static const uint8_t I2C_MASTER_DS = 0x00;
-__attribute__((unused)) static const uint8_t PWR_RESET = 0x80;
 
 static const uint8_t AK8963_PWR_DOWN = 0x00;
-__attribute__((unused)) static const uint8_t AK8963_RESET = 0x01;
+static const uint8_t AK8963_RESET = 0x01;
 static const uint8_t AK8963_FUSE_ROM = 0x0F;
+static const uint8_t AK8963_HOFL_MASK = 0x8;
 /*!
 *   @brief Initialization MPU9250
 *       @arg status - errors with connection to device
@@ -117,9 +117,9 @@ void AK8963_Init(void)
 
     uint8_t Buf[3];
     (void)I2C_MemoryReadMultiple(__configEXTMPU_SOURCE,AK8963_ADDR,AK8963_ASAX, Buf, 3);
-    MPU9250.MagnetometerScaleFactor[0] = (float)(Buf[0] - 128) /  256.0 + 1.0;
-    MPU9250.MagnetometerScaleFactor[1] = (float)(Buf[1] - 128) /  256.0 + 1.0;
-    MPU9250.MagnetometerScaleFactor[2] = (float)(Buf[2] - 128) /  256.0 + 1.0;
+    MPU9250.MagnetometerScaleFactor[0] = (float)((Buf[0] - 128) /  256.0) + 1.0;
+    MPU9250.MagnetometerScaleFactor[1] = (float)((Buf[1] - 128) /  256.0) + 1.0;
+    MPU9250.MagnetometerScaleFactor[2] = (float)((Buf[2] - 128) /  256.0) + 1.0;
     delay_ms(100);
 
 #if(CALC_I2C_SCANNING == 1)
@@ -206,7 +206,7 @@ void MPU_ScaleCalibration(I2C_TypeDef* I2Cx, uint8_t aScale, uint8_t gScale)
 //-------------------------------------------------------------------------------//
 }
 
-void MPU_GyroscopeCalibration(I2C_TypeDef* I2Cx, uint16_t CalPoints)
+void MPU_GyroscopeCalibration(uint16_t CalPoints)
 {
     int32_t x = 0;
     int32_t y = 0;
@@ -220,8 +220,7 @@ void MPU_GyroscopeCalibration(I2C_TypeDef* I2Cx, uint16_t CalPoints)
         x += MPU9250.Raw_Data[4];
         y += MPU9250.Raw_Data[5];
         z += MPU9250.Raw_Data[6];
-        int delay = 300;
-        while(--delay > 0) {}
+        delay_ms(12);
     }
 
     MPU9250.GyroCal[0] = ((float)x) / (float)CalPoints;
@@ -282,23 +281,21 @@ bool MPU_Connect(I2C_TypeDef* I2Cx, bool IsWrite)
 return false;
 }
 
-uint8_t Bus[21];
 void MPU_ReadRawData(void)
 {
-    uint8_t* MPU_data = Bus;
-    //uint8_t* AK8963_data = MPU_data + 14;
+    uint8_t* MPU_data = MPU9250.Bus;
 
     uint16_t DataItems = I2C_MemoryReadMultiple(__configEXTMPU_SOURCE,MPU9250_ADDR,MPUACCEL_XOUT_H, (uint8_t *)MPU_data, 14);
     if(DataItems != 14) return;
     MPU9250.MPUstatus = 0;
 
-    MPU9250.Raw_Data[0] = Bus[0] << 8 | Bus[1];     //ax
-    MPU9250.Raw_Data[1] = Bus[2] << 8 | Bus[3];     //ay
-    MPU9250.Raw_Data[2] = Bus[4] << 8 | Bus[5];     //az
-    MPU9250.Raw_Data[3] = Bus[6] << 8 | Bus[7];     //temperature
-    MPU9250.Raw_Data[4] = Bus[8] << 8 | Bus[9];     //gx
-    MPU9250.Raw_Data[5] = Bus[10] << 8 | Bus[11];   //gy
-    MPU9250.Raw_Data[6] = Bus[12] << 8 | Bus[13];   //gz
+    MPU9250.Raw_Data[0] = MPU9250.Bus[0] << 8 | MPU9250.Bus[1];     //ax
+    MPU9250.Raw_Data[1] = MPU9250.Bus[2] << 8 | MPU9250.Bus[3];     //ay
+    MPU9250.Raw_Data[2] = MPU9250.Bus[4] << 8 | MPU9250.Bus[5];     //az
+    MPU9250.Raw_Data[3] = MPU9250.Bus[6] << 8 | MPU9250.Bus[7];     //temperature
+    MPU9250.Raw_Data[4] = MPU9250.Bus[8] << 8 | MPU9250.Bus[9];     //gx
+    MPU9250.Raw_Data[5] = MPU9250.Bus[10] << 8 | MPU9250.Bus[11];   //gy
+    MPU9250.Raw_Data[6] = MPU9250.Bus[12] << 8 | MPU9250.Bus[13];   //gz
 
 
     MPU9250.Accelerometer[0] = MPU9250.Raw_Data[0] / MPU9250.aScaleFactor;
@@ -309,7 +306,7 @@ void MPU_ReadRawData(void)
     MPU9250.Gyroscope[1] = (MPU9250.Raw_Data[5] - MPU9250.GyroCal[1]) / MPU9250.gScaleFactor;
     MPU9250.Gyroscope[2] = (MPU9250.Raw_Data[6] - MPU9250.GyroCal[2]) / MPU9250.gScaleFactor;
 }
-float df;
+
 void AK8963_ReadRawData(void)
 {
     uint8_t DataItems = I2C_MemoryReadSingle(__configEXTMPU_SOURCE,AK8963_ADDR,AK8963_ST1);
@@ -317,15 +314,19 @@ void AK8963_ReadRawData(void)
     DataItems &= 0x1;
     if(DataItems == 0x00) return;
 
-    uint8_t* Data = Bus + 14;
+    uint8_t* Data = MPU9250.Bus + 14;
     DataItems = I2C_MemoryReadMultiple(__configEXTMPU_SOURCE,AK8963_ADDR,AK8963_HXL,Data,7);
     if(DataItems != 7) return;
+    if((MPU9250.Bus[20] & AK8963_HOFL_MASK)) return;
 
-    MPU9250.Raw_Data[7] = Bus[15] << 8 | Bus[14];
-    MPU9250.Raw_Data[8] = Bus[17] << 8 | Bus[16];
-    MPU9250.Raw_Data[9] = Bus[19] << 8 | Bus[18];
+    MPU9250.Raw_Data[7] = (((int16_t)MPU9250.Bus[15] << 8) | MPU9250.Bus[14]);
+    MPU9250.Raw_Data[8] = (((int16_t)MPU9250.Bus[17] << 8) | MPU9250.Bus[16]);
+    MPU9250.Raw_Data[9] = (((int16_t)MPU9250.Bus[19] << 8) | MPU9250.Bus[18]);
 
-    df = Bus[15] << 8 | Bus[14];
+    MPU9250.Compass[0] = ((float)(MPU9250.Raw_Data[7])) * MPU9250.MagnetometerScaleFactor[0] * 0.1499 - 8.56;
+    MPU9250.Compass[1] = ((float)(MPU9250.Raw_Data[8])) * MPU9250.MagnetometerScaleFactor[1] * 0.1499 - 8.56;
+    MPU9250.Compass[2] = ((float)(MPU9250.Raw_Data[9])) * MPU9250.MagnetometerScaleFactor[2] * 0.1499 - 8.56;
+
     delay_ms(10);
 }
 #endif /*EXTERNAL_MPU9250*/

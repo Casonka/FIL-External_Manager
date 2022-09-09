@@ -80,6 +80,7 @@ struct {
     float gScaleFactor;
     float MagnetometerScaleFactor[3];
     int16_t Raw_Data[10];
+    uint8_t Bus[21];
 }MPU9250;
 
 /*!
@@ -114,7 +115,7 @@ enum magnetometerResolutionRange
 bool MPU_Connect(I2C_TypeDef* I2Cx, bool IsWrite);
 
 void MPU_ScaleCalibration(I2C_TypeDef* I2Cx, uint8_t aScale, uint8_t gScale);
-void MPU_GyroscopeCalibration(I2C_TypeDef* I2Cx, uint16_t CalPoints);
+void MPU_GyroscopeCalibration(uint16_t CalPoints);
 /*!
 *   @brief This function is writing new value to device MPUXX50
 *       @note [MPU] if end value if false then have problem with bus or device
