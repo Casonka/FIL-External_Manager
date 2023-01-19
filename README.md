@@ -19,18 +19,20 @@ cd YOUR_PROJECT
 git clone https://github.com/Casonka/FIL-External_Manager.git & cd FIL-External_Manager & rmdir /q README.md
 ```
 
-Поздравляю. Менеджер внешних библиотек готов подключать внешние библиотеки. Для добавления нужной вам библиотеки необходимо её загрузить. Для этого выполните следующие команды. 
+Поздравляю. Менеджер внешних библиотек готов подключать внешние библиотеки. Для добавления нужной вам библиотеки необходимо её загрузить. Для этого выполните следующие команды. Параметр LIB_REPOS необходимо заменить ссылкой на репозиторий библиотеки. 
 
 ```sh
 cd YOUR_PROJECT
 git clone LIB_REPOS
 ```
-В место LIB_REPOS необходимо написать ссылку на репозиторий библиотеки. Для удобства все доступные ссылки были сгруппированы в таблицу.
 
-
+Для удобства все доступные ссылки были сгруппированы в таблицу.
 
 | Название библиотеки | Ссылка на загрузку |
 | ------ | ------ |
 | SSD1306 | https://github.com/RCR-DSTU/SSD1306.git |
 | MPU9250 | https://github.com/RCR-DSTU/MPU9250.git |
 | Regulators | https://github.com/RCR-DSTU/Regulators.git |
+| Filters | https://github.com/RCR-DSTU/Filters.git |
+| Kinematics | https://github.com/RCR-DSTU/Kinematics.git |
+| TCS3472 | https://github.com/RCR-DSTU/TCS3472.git |
