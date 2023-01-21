@@ -28,11 +28,11 @@ git clone LIB_REPOS
 
 Для удобства все доступные ссылки были сгруппированы в таблицу.
 
-| Название библиотеки | Ссылка на загрузку |
-| ------ | ------ |
-| SSD1306 | https://github.com/RCR-DSTU/SSD1306.git |
-| MPU9250 | https://github.com/RCR-DSTU/MPU9250.git |
-| Regulators | https://github.com/RCR-DSTU/Regulators.git |
-| Filters | https://github.com/RCR-DSTU/Filters.git |
-| Kinematics | https://github.com/RCR-DSTU/Kinematics.git |
-| TCS3472 | https://github.com/RCR-DSTU/TCS3472.git |
+| Название библиотеки | Краткое описание
+| ------ | ------ | 
+| [SSD1306](https://github.com/RCR-DSTU/SSD1306.git) |  |
+| [MPU9250](https://github.com/RCR-DSTU/MPU9250.git) |  |
+| [Regulators](https://github.com/RCR-DSTU/Regulators.git) |  |
+| [Filters](https://github.com/RCR-DSTU/Filters.git) |  |
+| [Kinematics](https://github.com/RCR-DSTU/Kinematics.git) |  |
+| [TCS3472](https://github.com/RCR-DSTU/TCS3472.git) |  |
