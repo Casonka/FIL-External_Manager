@@ -30,7 +30,7 @@ git clone LIB_REPOS
 
 | Название библиотеки | Краткое описание
 | ------ | ------ | 
-| [SSD1306](https://github.com/RCR-DSTU/SSD1306.git) |  |
+| [SSD1306](https://github.com/RCR-DSTU/SSD1306.git) | Библиотека для работы с дисплеем SSD1306. Можно рисовать простые фигуры и изображения. Оригинальная версия принадлежит автору - [Alexander Lutsai](https://github.com/SL-RU/stm32libs/tree/master/HAL/ssd1306) |
 | [MPU9250](https://github.com/RCR-DSTU/MPU9250.git) |  |
 | [Regulators](https://github.com/RCR-DSTU/Regulators.git) |  |
 | [Filters](https://github.com/RCR-DSTU/Filters.git) |  |
