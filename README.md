@@ -16,7 +16,7 @@
 
 ```sh
 cd YOUR_PROJECT
-git clone https://github.com/Casonka/FIL-External_Manager.git & cd FIL-External_Manager & rmdir /q README.md
+git clone https://github.com/Casonka/FIL-External_Manager.git & cd FIL-External_Manager & del /q README.md
 ```
 
 Поздравляю. Менеджер внешних библиотек готов подключать внешние библиотеки. Для добавления нужной вам библиотеки необходимо её загрузить. Для этого выполните следующие команды. Параметр LIB_REPOS необходимо заменить ссылкой на репозиторий библиотеки. 
